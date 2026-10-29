@@ -66,6 +66,8 @@ body { position: fixed; inset: 0; touch-action: none; user-select: none; -webkit
 .sheet-list .action + .action { border-top: 1px solid #3c3c40; }
 .action.on { color: #ffffff; font-weight: 600; }
 .action-cancel { border-radius: 14px; color: #d4d4d4; font-weight: 600; }
+/* Put away on a note: the ink stays, the tools go, and the phone lets touches through. */
+.resting .bar, .resting .sheet, .resting .notice { display: none; }
 </style>
 <style class="float-position"></style>
 </head>
@@ -176,6 +178,8 @@ const send = message => parent.postMessage({ divernote: 1, ...message }, '*');
 let place, view = { scrollTop: 0, lines: [], width: 0, height: 0 };
 let strokes = [], done = [], undone = [];
 let tool = 'pen', colour = 0;
+// Whether the phone keeps a put-away page showing over the note; older builds close it.
+let canRest = false;
 let settings = { side: 'bottom', x: 8, y: 0.6 };
 const group = $('.strokes');
 
@@ -354,7 +358,15 @@ $$('.dot').forEach(button => button.addEventListener('click', () => {
   $$('.dot').forEach(each => each.classList.toggle('on', each === button));
   if (tool === 'erase') $('.tool[data-tool=pen]').click();
 }));
-$('.done').addEventListener('click', () => send({ type: 'close' }));
+// On a note the ink stays in sight once the bar is put away.
+$('.done').addEventListener('click', () => {
+  if (place === 'note' && canRest) { resting(true); send({ type: 'rest' }); }
+  else send({ type: 'close' });
+});
+function resting(on) {
+  document.body.classList.toggle('resting', on);
+  if (on) { current?.path?.remove(); current = undefined; pan = undefined; pointers.clear(); $('.sheet').hidden = true; }
+}
 
 // --- where the bar sits -----------------------------------------------------------------
 
@@ -407,6 +419,9 @@ addEventListener('message', event => {
   if (event.source !== parent || !message || message.divernote !== 1) return;
   if (message.type === 'open') {
     place = message.place;
+    canRest = typeof message.resting === 'boolean';
+    resting(Boolean(message.resting) && place === 'note');
+    if (message.resting && place === 'note') send({ type: 'rest' });
     $('.attach').hidden = place !== 'issue';
     try { strokes = place === 'note' ? decodeInk(message.data) : []; } catch { strokes = []; notify('The ink on this note could not be read.'); }
     done = []; undone = [];
@@ -414,6 +429,8 @@ addEventListener('message', event => {
     settings = { ...settings, ...(Number.isFinite(saved.x) ? { x: saved.x } : {}), ...(Number.isFinite(saved.y) ? { y: saved.y } : {}) };
     dock(saved.side ?? settings.side, false);
     render();
+  } else if (message.type === 'wake') {
+    resting(false);
   } else if (message.type === 'view') {
     view = { scrollTop: message.scrollTop, lines: Array.isArray(message.lines) ? message.lines : [], width: message.width, height: message.height };
     render();

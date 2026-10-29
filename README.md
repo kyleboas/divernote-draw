@@ -4,7 +4,9 @@ A Divernote extension. Write and draw straight onto a note or an issue on an
 iPhone or iPad, the way Notability does, with a finger or an Apple Pencil.
 
 - **draw** sits in the row under the input on an open note or issue. It
-  brings up the draw bar; the check mark puts it away.
+  brings up the draw bar; the check mark puts it away. On a note the ink
+  stays in sight after that, and whenever the note is opened, and the note
+  takes touches as usual (needs a phone build with resting pages).
 - Pen, highlighter and eraser, four colours, undo and redo. A pencil's
   pressure sets the line's width.
 - With the bar out, one finger draws and two fingers scroll.
