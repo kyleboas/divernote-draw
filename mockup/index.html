@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>divernote-draw</title>
+<style>
+/* The phone page's own look (ios/terminal-web/page/styles.css). */
+:root {
+  --bg: #1e1a1d; --fg: #ffffff; --dim: #808080; --accent: #8abeb7;
+  /* The font is a setting; this mockup shows Helvetica. */
+  --font: Helvetica, "Helvetica Neue", Arial, sans-serif;
+  --font-size: clamp(11px, calc((100vw - 16px) / 30), 14px);
+  --row: calc(var(--font-size) * 1.32);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; overscroll-behavior: none; }
+body { position: fixed; inset: 0; -webkit-text-size-adjust: 100%; }
+.app { display: flex; flex-direction: column; height: 100%; width: 100%; background: var(--bg); color: var(--fg); }
+.app.dock-top { flex-direction: column-reverse; }
+.app.dock-left { flex-direction: row-reverse; }
+.app.dock-right { flex-direction: row; }
+.frame { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding-top: env(safe-area-inset-top); }
+.type { font-family: var(--font); font-size: var(--font-size); line-height: 1.32; }
+.screen { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 4px 8px 0; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+.scroller { position: relative; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none; }
+.scroller::-webkit-scrollbar { display: none; }
+.scroller.pen { touch-action: none; }
+.view[hidden] { display: none; }
+.line { position: relative; white-space: pre-wrap; min-height: var(--row); padding-left: 1.6em; }
+.line.head, .line.flush { padding-left: 0.5em; }
+.line.sel::before, .issue-row.sel::before { content: ">"; position: absolute; left: 0; }
+.bold { font-weight: 700; }
+.dim { opacity: 0.55; }
+.accent { color: var(--accent); }
+.green { color: #b5bd68; }
+.red { color: #cc6666; }
+.yellow { color: #f0c674; }
+.teal { color: #8abeb7; }
+.issue-row { position: relative; display: grid; grid-template-columns: 1.4em 7.5em 1fr 3.2em; gap: 0.4em; padding-left: 1em; white-space: pre; }
+.issue-title, .issue-project { overflow: hidden; text-overflow: ellipsis; }
+.issue-when { text-align: right; }
+.paper { height: 50vh; }
+.ink { position: absolute; left: 0; top: 0; width: 100%; pointer-events: none; overflow: visible; }
+.scroller.pen .ink { pointer-events: auto; }
+.stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.stroke.highlight { opacity: 0.35; }
+.sketch { display: block; max-width: calc(100% - 1.6em); height: auto; margin: 2px 0 0 1.6em; }
+/* Under the grid: status, the input between its rules, the pages either side. */
+.composer { flex: none; padding: 0 8px; }
+.status-line { display: flex; justify-content: space-between; gap: 0.5em; min-height: var(--row); white-space: pre; }
+.status-line.right { justify-content: flex-end; }
+.rule { display: flex; align-items: center; gap: 0.5em; min-height: var(--row); }
+.rule::after { content: ""; flex: 1; border-top: 1px solid var(--dim); }
+.rule-label { opacity: 0.55; white-space: pre; }
+.rule-label.accent { opacity: 1; }
+.rule-label:empty { display: none; }
+.input {
+  display: block; width: 100%; min-height: calc(var(--row) * 2); margin: 0; border: 0; padding: 4px 0 0; resize: none; outline: none;
+  background: var(--bg); color: var(--fg); caret-color: var(--accent); font: inherit; line-height: 1.32; -webkit-user-select: text; user-select: text;
+}
+.page-nav { flex: none; display: flex; gap: 1em; min-height: calc(var(--row) + 4px); padding: 4px 8px calc(4px + env(safe-area-inset-bottom)); }
+.page-go { flex: none; padding: 0; border: 0; background: none; font: inherit; color: var(--dim); cursor: pointer; outline: none; -webkit-tap-highlight-color: transparent; }
+.page-go[hidden] { display: none; }
+.page-go.push { margin-left: auto; }
+.page-go.ink-go { color: var(--accent); }
+.page-go.ink-go.on { color: var(--fg); font-weight: 700; }
+/* The extension's bar, drawn like the page's own key bar (.keybar). */
+.inkbar {
+  flex: none; position: relative; z-index: 5; display: flex; align-items: center;
+  height: calc(48px + env(safe-area-inset-bottom)); padding: 0 4px env(safe-area-inset-bottom);
+  border-radius: 14px 14px 0 0; background: #000000; overflow-x: auto; scrollbar-width: none;
+}
+.inkbar::-webkit-scrollbar { display: none; }
+.inkbar[hidden] { display: none; }
+.dock-top .inkbar { height: calc(48px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) 4px 0; border-radius: 0 0 14px 14px; }
+.dock-left .inkbar, .dock-right .inkbar {
+  flex-direction: column; width: 48px; height: auto; overflow-x: hidden; overflow-y: auto; gap: 2px;
+  padding: calc(8px + env(safe-area-inset-top)) 0 calc(8px + env(safe-area-inset-bottom));
+}
+.dock-left .inkbar { border-radius: 0 14px 14px 0; }
+.dock-right .inkbar { border-radius: 14px 0 0 14px; }
+/* Floating: a pill over the page, wherever it was last put down. */
+.dock-float .inkbar {
+  position: fixed; z-index: 15; height: 48px; padding: 0 4px; max-width: calc(100vw - 16px); border-radius: 14px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); left: var(--float-x, 8px); top: var(--float-y, 60%);
+}
+/* Floating, the bar folds into two rows: tools and history on top, colours and placement below. */
+.dock-float .inkbar { display: grid; grid-template-columns: 28px repeat(6, 34px); grid-auto-rows: 40px; gap: 2px; height: auto; padding: 4px; overflow: visible; }
+.dock-float .bar-key, .dock-float .dot { width: 34px; min-width: 0; }
+.dock-float .float-grip { grid-row: span 2; height: 82px; }
+.dock-float .tool, .dock-float .undo, .dock-float .redo, .dock-float .ink-done { order: 1; }
+.dock-float .dot { order: 2; }
+.dock-float .dock { order: 3; }
+.dock-float .float-grip { order: 0; }
+.float-grip { display: none; flex: none; width: 26px; height: 40px; align-items: center; justify-content: center; color: #8a8a8a; touch-action: none; cursor: grab; }
+.dock-float .float-grip { display: flex; }
+.float-grip .icon { width: 20px; height: 20px; }
+.bar-key {
+  flex: 1 0 auto; min-width: 34px; height: 40px; display: flex; align-items: center; justify-content: center;
+  margin: 0; border: 0; border-radius: 8px; padding: 0 4px; background: none; color: #ffffff;
+  font: 400 17px -apple-system, system-ui, sans-serif; white-space: nowrap; -webkit-tap-highlight-color: transparent;
+}
+.dock-left .bar-key, .dock-right .bar-key { flex: none; width: 40px; min-width: 0; }
+.bar-key.on { background: #ffffff; color: #000000; }
+.bar-key:disabled { opacity: 0.35; }
+.icon { width: 22px; height: 22px; }
+.ink-done { color: var(--accent); }
+.nav-icon { width: 1.1em; height: 1.1em; vertical-align: -0.2em; }
+.dot { flex: none; width: 30px; height: 40px; border: 0; padding: 0; background: none; display: flex; align-items: center; justify-content: center; }
+.dock-left .dot, .dock-right .dot { width: 40px; height: 32px; }
+.dot::after { content: ""; width: 20px; height: 20px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 2px #000000; }
+.dot.on::after { box-shadow: 0 0 0 2px #000000, 0 0 0 4px #ffffff; }
+.dot-white { color: #ffffff; }
+.dot-red { color: #cc6666; }
+.dot-yellow { color: #f0c674; }
+.dot-blue { color: #81a2be; }
+/* Where the bar sits, picked like the page's own action sheet (.actions). */
+.sheet { position: fixed; inset: 0; z-index: 20; display: flex; align-items: flex-end; padding: 0 8px calc(8px + env(safe-area-inset-bottom)); background: rgba(0, 0, 0, 0.35); }
+.sheet[hidden] { display: none; }
+.sheet-panel { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+.sheet-list { display: flex; flex-direction: column; border-radius: 14px; overflow: hidden; background: #2d2d30; }
+.sheet-title { padding: 12px 16px; color: #8a8a8a; font: 13px -apple-system, system-ui, sans-serif; text-align: center; border-bottom: 1px solid #3c3c40; }
+.action { border: 0; background: #2d2d30; color: var(--accent); padding: 16px; font: 500 17px -apple-system, system-ui, sans-serif; text-align: center; -webkit-tap-highlight-color: transparent; }
+.sheet-list .action + .action { border-top: 1px solid #3c3c40; }
+.action.on { color: #ffffff; font-weight: 600; }
+.action-cancel { border-radius: 14px; color: #d4d4d4; font-weight: 600; }
+</style>
+<style class="float-position"></style>
+</head>
+<body>
+<main class="app dock-bottom">
+  <div class="frame">
+    <div class="screen type">
+      <div class="view view-home scroller" data-view="home">
+        <div class="line head"> </div>
+        <div class="line head dim">Yesterday · 28 October 2026</div>
+        <div class="line row bold" data-note="trip">Trip ideas</div>
+        <div class="line row" data-note="app">Divernote phone app feels like the terminal now</div>
+        <div class="line"> </div>
+        <div class="line head dim">Today · 29 October 2026</div>
+        <div class="line row" data-note="clean">□ Pick up dry cleaning</div>
+        <div class="line"> </div>
+        <div class="line row sel" data-note="bank">Call the bank about the card</div>
+      </div>
+      <div class="view view-note scroller" data-view="note" hidden>
+        <div class="note-body"></div>
+        <div class="paper"></div>
+      </div>
+      <div class="view view-issues scroller" data-view="issues" hidden>
+        <div class="issue-row row sel" data-issue="history"><span class="yellow">◇</span><span class="issue-project">divernote</span><span class="issue-title">Share issue conversation history when switching coding agents</span><span class="issue-when">#654</span></div>
+        <div class="issue-row row" data-issue="footer"><span class="teal">●</span><span class="issue-project dim">divernote</span><span class="issue-title">Footer overlaps the last note on small phones</span><span class="issue-when dim">2m</span></div>
+        <div class="issue-row row" data-issue="board"><span class="teal">●</span><span class="issue-project dim">tacticsjournal</span><span class="issue-title">Board canvas drops the last point</span><span class="issue-when dim">0m</span></div>
+      </div>
+      <div class="view view-issue scroller" data-view="issue" hidden>
+        <div class="issue-body"></div>
+        <div class="paper"></div>
+      </div>
+    </div>
+    <div class="composer type">
+      <div class="status-line right dim status-top"></div>
+      <div class="rule"><span class="rule-label"></span></div>
+      <textarea class="input" rows="2" enterkeyhint="send" autocapitalize="sentences" aria-label="Type into divernote"></textarea>
+      <div class="rule"></div>
+      <div class="status-line dim status-bottom"></div>
+    </div>
+    <nav class="page-nav type">
+      <button class="page-go go-back"></button>
+      <button class="page-go ink-go push" hidden><svg xmlns="http://www.w3.org/2000/svg" class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 20h4L18.5 9.5a2.828 2.828 0 1 0-4-4L4 16zm9.5-13.5l4 4"/></svg> draw</button>
+      <button class="page-go go-next"></button>
+    </nav>
+  </div>
+
+  <!-- Icons: Tabler Icons by Paweł Kuna, MIT licence, via Iconify (icon-sets.iconify.design/tabler). -->
+  <nav class="inkbar" hidden aria-label="divernote-draw">
+    <span class="float-grip" aria-label="Move"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a1 1 0 1 0 2 0a1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0a1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0a1 1 0 1 0-2 0m6-14a1 1 0 1 0 2 0a1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0a1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0a1 1 0 1 0-2 0"/></svg></span>
+    <button class="bar-key tool on" data-tool="pen" aria-label="Pen"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 20h4L18.5 9.5a2.828 2.828 0 1 0-4-4L4 16zm9.5-13.5l4 4"/></svg></button>
+    <button class="bar-key tool" data-tool="highlight" aria-label="Highlighter"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 19h4L17.5 8.5a2.828 2.828 0 1 0-4-4L3 15zm9.5-13.5l4 4m-12 4l4 4M21 15v4h-8l4-4z"/></svg></button>
+    <button class="bar-key tool" data-tool="erase" aria-label="Eraser"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H8.5l-4.21-4.3a1 1 0 0 1 0-1.41l10-10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41L11.5 20m6.5-6.7L11.7 7"/></svg></button>
+    <button class="dot dot-white on" data-colour="#ffffff" aria-label="White"></button>
+    <button class="dot dot-red" data-colour="#cc6666" aria-label="Red"></button>
+    <button class="dot dot-yellow" data-colour="#f0c674" aria-label="Yellow"></button>
+    <button class="dot dot-blue" data-colour="#81a2be" aria-label="Blue"></button>
+    <button class="bar-key undo" disabled aria-label="Undo"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="m9 14l-4-4l4-4"/><path d="M5 10h11a4 4 0 1 1 0 8h-1"/></g></svg></button>
+    <button class="bar-key redo" disabled aria-label="Redo"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="m15 14l4-4l-4-4"/><path d="M19 10H8a4 4 0 1 0 0 8h1"/></g></svg></button>
+    <button class="bar-key dock" aria-label="Move the bar"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm5-2v16"/></svg></button>
+    <button class="bar-key ink-done" aria-label="Done"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m5 12l5 5L20 7"/></svg></button>
+  </nav>
+
+  <div class="sheet" hidden>
+    <div class="sheet-panel">
+      <div class="sheet-list">
+        <div class="sheet-title">Draw bar position</div>
+        <button class="action" data-dock="top">Top</button>
+        <button class="action" data-dock="left">Left</button>
+        <button class="action" data-dock="right">Right</button>
+        <button class="action" data-dock="bottom">Bottom</button>
+        <button class="action" data-dock="float">Float</button>
+      </div>
+      <button class="action action-cancel">Cancel</button>
+    </div>
+  </div>
+</main>
+<script>
+const $ = (s, root = document) => root.querySelector(s);
+const $$ = (s, root = document) => [...root.querySelectorAll(s)];
+const NS = 'http://www.w3.org/2000/svg';
+
+// --- content --------------------------------------------------------------------------
+
+const NOTES = {
+  trip: { title: 'Trip ideas', lines: ['Dive sites near the reef', '- North wall, drift dive', '- Coral garden, shallow, good for photos', '- Ask about night dives', '', 'Gear', '- Rent a 5mm wetsuit', '- Bring the spare mask', '', 'Budget', 'Flights ~ 600', 'Boat days ~ 90 each'] },
+  app: { lines: ['Divernote phone app feels like the terminal now'] },
+  clean: { lines: ['Pick up dry cleaning'] },
+  bank: { lines: ['Call the bank about the card'] },
+};
+const ISSUES = {
+  history: { title: 'Share issue conversation history when switching coding agents', log: [
+    ['dim', '· Divernote started the agent'], ['', ''],
+    ['', 'Done. Switching from pi to claude (or back) now hands the new agent the earlier conversation.'], ['', ''],
+    ['', 'Opened PR #654. Tests pass.'], ['', ''], ['files', ''] ] },
+  footer: { title: 'Footer overlaps the last note on small phones', log: [
+    ['dim', '· Divernote started the agent'], ['', ''],
+    ['', 'I moved the footer out of the scroll area and gave the list bottom padding. Can you check the spacing on a small phone?'] ] },
+  board: { title: 'Board canvas drops the last point', log: [['dim', '· Divernote started the agent'], ['', ''], ['', 'Working on it.']] },
+};
+
+// --- screens --------------------------------------------------------------------------
+
+let screen = 'home', openId, inkOn = false, seeded = false;
+const ink = new Map();       // one svg of strokes per note or issue
+const history = new Map();   // and its undo history
+
+function line(text, cls = '') {
+  const div = document.createElement('div');
+  div.className = `line ${cls}`.trim();
+  div.textContent = text || ' ';
+  return div;
+}
+
+function show(name) {
+  screen = name;
+  $$('.view').forEach(v => { v.hidden = v.dataset.view !== name; });
+  const inkable = name === 'note' || name === 'issue';
+  if (!inkable && inkOn) setInk(false);
+  $('.ink-go').hidden = !inkable;
+  const back = $('.go-back'), next = $('.go-next');
+  const top = $('.status-top'), bottom = $('.status-bottom');
+  top.textContent = '';
+  bottom.replaceChildren();
+  next.classList.remove('push');
+  if (name === 'home') { back.textContent = '‹ assistant'; next.textContent = 'issues ↓'; next.classList.add('push'); }
+  if (name === 'note') { back.textContent = '‹ notes'; next.textContent = 'edit ›'; }
+  if (name === 'issues') { back.textContent = '↑ notes'; next.textContent = 'repos ↓'; next.classList.add('push'); top.textContent = 'claude · no sbx'; }
+  if (name === 'issue') {
+    back.textContent = '‹ issues'; next.textContent = '';
+    top.textContent = 'claude · no sbx';
+    const left = document.createElement('span'), right = document.createElement('span');
+    left.textContent = '$2.130 · 56.0%/200k (auto)';
+    right.textContent = 'claude-opus-5-5 · high';
+    bottom.append(left, right);
+  }
+  next.hidden = !next.textContent;
+  paintComposer();
+}
+
+function openNote(id) {
+  openId = `note:${id}`;
+  const body = $('.note-body');
+  body.replaceChildren();
+  const note = NOTES[id];
+  if (note.title) body.append(line(note.title, 'flush bold'), line('', 'flush'));
+  note.lines.forEach((text, i) => { const l = line(text, 'flush'); l.dataset.at = i; body.append(l); });
+  show('note');
+  attachInk($('.view-note'));
+  if (id === 'trip' && !seeded) seed();
+}
+
+function openIssue(id) {
+  openId = `issue:${id}`;
+  const issue = ISSUES[id];
+  const body = $('.issue-body');
+  body.replaceChildren(line(issue.title, 'flush bold'), line('Log · 0 messages', 'flush dim'), line('', 'flush'));
+  for (const [kind, text] of issue.log) {
+    if (kind === 'files') {
+      const l = line('', 'flush');
+      const a = document.createElement('span'), b = document.createElement('span'), c = document.createElement('span');
+      a.className = 'dim'; a.textContent = '· 3 files changed ';
+      b.className = 'green'; b.textContent = '+6';
+      c.className = 'red'; c.textContent = ' −3';
+      l.replaceChildren(a, b, c);
+      body.append(l);
+    } else body.append(line(text, `flush ${kind}`));
+  }
+  if (!issue.sent) { issue.sent = document.createElement('div'); issue.sent.className = 'sent'; }
+  body.append(issue.sent);
+  show('issue');
+  attachInk($('.view-issue'));
+}
+
+// Rows: a tap selects, a tap on the selected row opens it.
+for (const [list, open, key] of [['.view-home', openNote, 'note'], ['.view-issues', openIssue, 'issue']]) {
+  $(list).addEventListener('click', e => {
+    const row = e.target.closest('.row');
+    if (!row) return;
+    if (row.classList.contains('sel')) return open(row.dataset[key]);
+    $$(`${list} .row`).forEach(r => r.classList.toggle('sel', r === row));
+  });
+}
+$('.go-back').addEventListener('click', () => {
+  if (screen === 'note' || screen === 'issues') show('home');
+  else if (screen === 'issue') show('issues');
+});
+$('.go-next').addEventListener('click', () => { if (screen === 'home') show('issues'); });
+
+// A swipe right goes back, as on the phone, unless the pen is out.
+let swipe;
+document.addEventListener('touchstart', e => { swipe = !inkOn && e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : undefined; }, { passive: true });
+document.addEventListener('touchend', e => {
+  if (!swipe) return;
+  const t = e.changedTouches[0];
+  if (t.clientX - swipe.x > 70 && Math.abs(t.clientY - swipe.y) < 50) $('.go-back').click();
+  swipe = undefined;
+});
+
+// --- the input --------------------------------------------------------------------------
+
+function strokeCount() { return openId && ink.get(openId) ? $$('.stroke', ink.get(openId)).length : 0; }
+function paintComposer() {
+  const label = $('.rule-label');
+  const typed = $('.input').value.trim();
+  const sketch = screen === 'issue' && inkOn && strokeCount();
+  label.classList.remove('accent');
+  if (screen === 'issue' && (typed || sketch)) { label.textContent = sketch ? (typed ? '─ enter send with sketch' : '─ enter send sketch') : '─ enter send'; label.classList.add('accent'); }
+  else if (screen === 'issue' || screen === 'issues') label.textContent = '─ enter close';
+  else if (screen === 'note' && inkOn) { label.textContent = '─ draw · saved with the note'; label.classList.add('accent'); }
+  else label.textContent = '';
+}
+// The input works with the drawing open: Return adds the words to the note, or
+// sends them to the issue's agent with whatever is drawn.
+const input = $('.input');
+input.addEventListener('input', paintComposer);
+input.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+  e.preventDefault();
+  submit();
+});
+function submit() {
+  const text = input.value.trim();
+  if (screen === 'note' && text) {
+    const body = $('.note-body');
+    body.append(line(text, 'flush'));
+    NOTES[openId.slice(5)].lines.push(text);
+  } else if (screen === 'home' && text) {
+    $('.view-home').append(line(text, 'row'));
+  } else if (screen === 'issue') {
+    const sent = $('.issue-body .sent');
+    const sketch = inkOn && strokeCount() ? takeSketch() : undefined;
+    if (!text && !sketch) return;
+    sent.append(line('', 'flush'));
+    if (text) sent.append(line(`› ${text}`, 'flush accent'));
+    if (sketch) sent.append(line('› sketch.png', 'flush accent dim'), sketch);
+  } else return;
+  input.value = '';
+  paintComposer();
+  requestAnimationFrame(size);
+}
+/** What is drawn on the issue, cropped, as a sketch for the log; the page is left clean. */
+function takeSketch() {
+  const svg = ink.get(openId);
+  const strokes = $$('.stroke', svg);
+  const box = svg.getBBox();
+  const sketch = document.createElementNS(NS, 'svg');
+  sketch.setAttribute('class', 'sketch');
+  sketch.setAttribute('viewBox', `${box.x - 6} ${box.y - 6} ${box.width + 12} ${box.height + 12}`);
+  sketch.setAttribute('width', box.width + 12);
+  sketch.setAttribute('height', box.height + 12);
+  strokes.forEach(st => sketch.append(st));
+  history.set(openId, { done: [], undone: [] });
+  paintHistory();
+  return sketch;
+}
+
+// --- ink -----------------------------------------------------------------------------------
+
+let tool = 'pen', colour = '#ffffff', current;
+
+function attachInk(scroller) {
+  $$('.ink', scroller).forEach(s => s.remove());
+  if (!ink.has(openId)) {
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', 'ink');
+    ink.set(openId, svg);
+    history.set(openId, { done: [], undone: [] });
+  }
+  current = { scroller, svg: ink.get(openId) };
+  scroller.append(current.svg);
+  size();
+  paintHistory();
+}
+function size() { if (current) current.svg.setAttribute('height', current.scroller.scrollHeight); }
+new ResizeObserver(size).observe($('.screen'));
+
+function setInk(on) {
+  inkOn = on;
+  $('.inkbar').hidden = !on;
+  $('.ink-go').classList.toggle('on', on);
+  $$('.scroller').forEach(s => s.classList.toggle('pen', on));
+  requestAnimationFrame(size);
+  paintComposer();
+}
+$('.ink-go').addEventListener('click', () => setInk(!inkOn));
+$('.ink-done').addEventListener('click', () => setInk(false));
+
+$$('.tool').forEach(b => b.addEventListener('click', () => {
+  tool = b.dataset.tool;
+  $$('.tool').forEach(t => t.classList.toggle('on', t === b));
+}));
+$$('.dot').forEach(b => b.addEventListener('click', () => {
+  colour = b.dataset.colour;
+  $$('.dot').forEach(d => d.classList.toggle('on', d === b));
+  if (tool === 'erase') $('.tool[data-tool=pen]').click();
+}));
+
+const pointers = new Map();
+let stroke, pan;
+const at = e => {
+  const box = current.svg.getBoundingClientRect();
+  return { x: e.clientX - box.left, y: e.clientY - box.top, p: e.pointerType === 'pen' && e.pressure > 0 ? 0.5 + e.pressure : 1 };
+};
+const touches = () => [...pointers.values()].filter(p => p.pointerType === 'touch');
+const mid = list => list.reduce((sum, p) => sum + p.clientY, 0) / list.length;
+
+document.addEventListener('pointerdown', e => {
+  if (!inkOn || !current || !e.target.closest?.('.ink')) return;
+  e.preventDefault();
+  current.svg.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, e);
+  // A second finger makes it a scroll, and takes back the line the first one started.
+  if (e.pointerType === 'touch' && touches().length >= 2) {
+    if (stroke?.touch) { stroke.path.remove(); stroke = undefined; }
+    pan = { y: mid(touches()) };
+    return;
+  }
+  if (pan) return;
+  if (tool === 'erase') erase(at(e));
+  else stroke = begin(at(e), e.pointerType === 'touch');
+});
+document.addEventListener('pointermove', e => {
+  if (!pointers.has(e.pointerId)) return;
+  pointers.set(e.pointerId, e);
+  if (pan) {
+    const y = mid(touches());
+    current.scroller.scrollTop -= y - pan.y;
+    pan.y = y;
+    return;
+  }
+  for (const each of e.getCoalescedEvents?.() ?? [e]) {
+    if (tool === 'erase') erase(at(each));
+    else if (stroke) extend(stroke, at(each));
+  }
+});
+function end(e) {
+  if (!pointers.delete(e.pointerId)) return;
+  if (pan) { if (!pointers.size) pan = undefined; return; }
+  if (stroke) { stroke.path.points = stroke.points; record({ add: stroke.path }); stroke = undefined; paintComposer(); }
+}
+document.addEventListener('pointerup', end);
+document.addEventListener('pointercancel', end);
+
+function begin(point, touch) {
+  const path = document.createElementNS(NS, 'path');
+  const highlight = tool === 'highlight';
+  path.setAttribute('class', highlight ? 'stroke highlight' : 'stroke');
+  path.setAttribute('stroke', highlight && colour === '#ffffff' ? '#f0c674' : colour);
+  path.setAttribute('stroke-width', highlight ? 16 : 2.5 * point.p);
+  current.svg.append(path);
+  const made = { path, points: [point], touch, highlight };
+  draw(made);
+  return made;
+}
+function extend(s, point) {
+  s.points.push(point);
+  draw(s);
+  // Writing near the bottom adds more paper.
+  if (point.y > current.scroller.scrollHeight - 160) {
+    const paper = document.createElement('div');
+    paper.className = 'paper';
+    current.svg.before(paper);
+    size();
+  }
+}
+function draw(s) {
+  const pts = s.points;
+  if (pts.length === 1) { s.path.setAttribute('d', `M${pts[0].x} ${pts[0].y} l0.01 0`); return; }
+  let d = `M${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < pts.length - 1; i++) d += ` Q${pts[i].x} ${pts[i].y} ${(pts[i].x + pts[i + 1].x) / 2} ${(pts[i].y + pts[i + 1].y) / 2}`;
+  const last = pts[pts.length - 1];
+  s.path.setAttribute('d', `${d} L${last.x} ${last.y}`);
+  if (!s.highlight) s.path.setAttribute('stroke-width', 2.5 * pts.reduce((a, p) => a + p.p, 0) / pts.length);
+}
+function erase(point) {
+  for (const path of $$('.stroke', current.svg)) {
+    const reach = 10 + Number(path.getAttribute('stroke-width')) / 2;
+    if (path.points?.some(p => Math.hypot(p.x - point.x, p.y - point.y) < reach)) {
+      path.remove();
+      record({ remove: path });
+      paintComposer();
+    }
+  }
+}
+
+function record(action) {
+  const h = history.get(openId);
+  h.done.push({ ...action, svg: current.svg });
+  h.undone = [];
+  paintHistory();
+}
+function apply(a, forward) {
+  const adding = forward ? a.add : a.remove, removing = forward ? a.remove : a.add;
+  if (adding) a.svg.append(adding);
+  if (removing) removing.remove();
+}
+$('.undo').addEventListener('click', () => { const h = history.get(openId), a = h.done.pop(); if (a) { apply(a, false); h.undone.push(a); } paintHistory(); paintComposer(); });
+$('.redo').addEventListener('click', () => { const h = history.get(openId), a = h.undone.pop(); if (a) { apply(a, true); h.done.push(a); } paintHistory(); paintComposer(); });
+function paintHistory() {
+  const h = openId && history.get(openId);
+  $('.undo').disabled = !h?.done.length;
+  $('.redo').disabled = !h?.undone.length;
+}
+
+// --- where the bar sits ----------------------------------------------------------------------
+
+// The bar's place is remembered until it is changed. The extension keeps it in
+// its own settings; here the browser keeps it, where the viewer allows.
+const DOCKS = ['top', 'left', 'right', 'bottom', 'float'];
+const KEY = 'divernote-draw-position';
+let place = { side: 'bottom', x: 8, y: 0.6 };
+try { place = { ...place, ...JSON.parse(localStorage.getItem(KEY) || '{}') }; } catch {}
+if (!DOCKS.includes(place.side)) place.side = 'bottom';
+function remember() { try { localStorage.setItem(KEY, JSON.stringify(place)); } catch {} }
+
+const floatSheet = $('.float-position').sheet;
+function placeFloat() {
+  const bar = $('.inkbar');
+  const w = bar.offsetWidth || 300, h = bar.offsetHeight || 48;
+  const x = Math.max(8, Math.min(innerWidth - w - 8, place.x));
+  const y = Math.max(8, Math.min(innerHeight - h - 8, place.y * innerHeight));
+  // Kept where it can really sit, so it comes back to the same spot.
+  place.x = x;
+  place.y = y / innerHeight;
+  while (floatSheet.cssRules.length) floatSheet.deleteRule(0);
+  floatSheet.insertRule(`.dock-float .inkbar { --float-x: ${x}px; --float-y: ${y}px; }`, 0);
+}
+function dock(side) {
+  place.side = side;
+  DOCKS.forEach(d => $('.app').classList.toggle(`dock-${d}`, d === side));
+  $$('.action[data-dock]').forEach(a => a.classList.toggle('on', a.dataset.dock === side));
+  remember();
+  requestAnimationFrame(() => { if (side === 'float') placeFloat(); size(); });
+}
+dock(place.side);
+addEventListener('resize', () => { if (place.side === 'float') placeFloat(); });
+$('.dock').addEventListener('click', () => { $('.sheet').hidden = false; });
+$$('.action[data-dock]').forEach(a => a.addEventListener('click', () => { dock(a.dataset.dock); $('.sheet').hidden = true; }));
+$('.action-cancel').addEventListener('click', () => { $('.sheet').hidden = true; });
+
+// The grip drags the floating bar; where it is let go is where it stays.
+const grip = $('.float-grip');
+let drag;
+grip.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  grip.setPointerCapture(e.pointerId);
+  const box = $('.inkbar').getBoundingClientRect();
+  drag = { id: e.pointerId, dx: e.clientX - box.left, dy: e.clientY - box.top };
+});
+grip.addEventListener('pointermove', e => {
+  if (drag?.id !== e.pointerId) return;
+  place.x = e.clientX - drag.dx;
+  place.y = (e.clientY - drag.dy) / innerHeight;
+  placeFloat();
+});
+const drop = e => { if (drag?.id === e.pointerId) { drag = undefined; remember(); } };
+grip.addEventListener('pointerup', drop);
+grip.addEventListener('pointercancel', drop);
+
+// Only a page scrolls, and only without the pen; nothing else moves the sheet under the finger.
+document.addEventListener('touchmove', e => {
+  const scroller = e.target.closest?.('.scroller');
+  if (!scroller || scroller.classList.contains('pen')) e.preventDefault();
+}, { passive: false });
+
+// --- some ink already on Trip ideas, so the idea shows at once --------------------------
+
+function seed() {
+  seeded = true;
+  const svg = ink.get('note:trip');
+  const box = svg.getBoundingClientRect();
+  const lineBox = i => $(`.note-body [data-at="${i}"]`).getBoundingClientRect();
+  const add = (points, cls, stroke, width) => {
+    const path = document.createElementNS(NS, 'path');
+    path.setAttribute('class', cls);
+    path.setAttribute('stroke', stroke);
+    path.setAttribute('stroke-width', width);
+    path.setAttribute('d', 'M' + points.map(p => `${p.x} ${p.y}`).join(' L'));
+    path.points = points;
+    svg.append(path);
+  };
+  const words = (i, text) => {
+    const node = $(`.note-body [data-at="${i}"]`).firstChild;
+    const from = node.textContent.indexOf(text);
+    const range = document.createRange();
+    range.setStart(node, from);
+    range.setEnd(node, from + text.length);
+    return range.getBoundingClientRect();
+  };
+  // A loop around "North wall", an arrow out to the margin, and a squiggle.
+  const north = words(1, 'North wall');
+  const rx = north.width / 2 + 10, cx = north.left - box.left + north.width / 2, cy = north.top - box.top + north.height / 2, loop = [];
+  for (let a = 0; a <= Math.PI * 2.15; a += 0.15) loop.push({ x: cx + Math.cos(a) * rx, y: cy + Math.sin(a) * north.height * 0.85 });
+  add(loop, 'stroke', '#cc6666', 2.2);
+  const ax = cx + rx;
+  add([{ x: ax, y: cy }, { x: ax + 50, y: cy + 8 }, { x: ax + 90, y: cy + 22 }], 'stroke', '#cc6666', 2.2);
+  add([{ x: ax + 80, y: cy + 14 }, { x: ax + 90, y: cy + 22 }, { x: ax + 78, y: cy + 26 }], 'stroke', '#cc6666', 2.2);
+  const scrawl = [];
+  for (let t = 0; t <= 1; t += 0.04) scrawl.push({ x: ax + 96 + t * 54, y: cy + 30 + Math.sin(t * 18) * 5 - t * 4 });
+  add(scrawl, 'stroke', '#cc6666', 2);
+  // A highlight over the flights.
+  const flights = words(10, 'Flights ~ 600');
+  const fy = flights.top - box.top + flights.height / 2;
+  add([{ x: flights.left - box.left - 4, y: fy }, { x: flights.right - box.left + 4, y: fy + 1 }], 'stroke highlight', '#f0c674', 16);
+  // A sketch below the text: a little boat on the water.
+  const boat = lineBox(11);
+  const by = boat.bottom - box.top + 70, bx = boat.left - box.left + 30;
+  add([{ x: bx, y: by }, { x: bx + 120, y: by }, { x: bx + 100, y: by + 26 }, { x: bx + 20, y: by + 26 }, { x: bx, y: by }], 'stroke', '#81a2be', 2.2);
+  add([{ x: bx + 60, y: by }, { x: bx + 60, y: by - 60 }, { x: bx + 100, y: by - 10 }, { x: bx + 60, y: by - 10 }], 'stroke', '#ffffff', 2.2);
+  const wave = [];
+  for (let t = 0; t <= 1; t += 0.03) wave.push({ x: bx - 20 + t * 170, y: by + 40 + Math.sin(t * 22) * 4 });
+  add(wave, 'stroke', '#81a2be', 2);
+}
+
+show('home');
+</script>
+</body>
+</html>
