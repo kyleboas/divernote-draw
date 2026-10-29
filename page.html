@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>divernote-draw</title>
+<!-- Icons: Tabler Icons by Paweł Kuna, MIT licence, via Iconify (icon-sets.iconify.design/tabler). -->
+<style>
+/* The frame lies over the note's lines: everything but the ink and the bar is clear. */
+:root { --fg: #ffffff; --dim: #808080; --accent: #8abeb7; --float-x: 8px; --float-y: 60%; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; overscroll-behavior: none; }
+body { position: fixed; inset: 0; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; font-family: -apple-system, system-ui, sans-serif; }
+.ink { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.stroke { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.stroke.highlight { opacity: 0.35; }
+.notice { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); max-width: calc(100% - 24px); padding: 8px 12px; border-radius: 10px; background: #000000; color: var(--fg); font-size: 13px; text-align: center; }
+.notice[hidden] { display: none; }
+/* The bar, drawn like the phone's own key bar. */
+.bar { position: absolute; z-index: 5; display: flex; align-items: center; gap: 0; padding: 4px; background: #000000; overflow: auto; scrollbar-width: none; }
+.bar::-webkit-scrollbar { display: none; }
+.dock-bottom .bar { left: 0; right: 0; bottom: 0; height: 48px; border-radius: 14px 14px 0 0; }
+.dock-top .bar { left: 0; right: 0; top: 0; height: 48px; border-radius: 0 0 14px 14px; }
+.dock-left .bar, .dock-right .bar { top: 0; bottom: 0; width: 48px; flex-direction: column; gap: 2px; }
+.dock-left .bar { left: 0; border-radius: 0 14px 14px 0; }
+.dock-right .bar { right: 0; border-radius: 14px 0 0 14px; }
+.dock-float .bar {
+  left: var(--float-x); top: var(--float-y); display: grid; grid-template-columns: 28px repeat(6, 34px); grid-auto-rows: 40px; gap: 2px;
+  border-radius: 14px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); overflow: visible;
+}
+.key {
+  flex: 1 0 auto; min-width: 34px; height: 40px; display: flex; align-items: center; justify-content: center; margin: 0; border: 0; border-radius: 8px;
+  padding: 0 4px; background: none; color: #ffffff; -webkit-tap-highlight-color: transparent;
+}
+.dock-left .key, .dock-right .key, .dock-float .key { flex: none; width: 34px; min-width: 0; }
+.dock-left .key, .dock-right .key { width: 40px; }
+.key.on { background: #ffffff; color: #000000; }
+.key:disabled { opacity: 0.35; }
+.key[hidden] { display: none; }
+.key.done { color: var(--accent); }
+.icon { width: 22px; height: 22px; }
+.dot { flex: none; width: 30px; height: 40px; border: 0; padding: 0; background: none; display: flex; align-items: center; justify-content: center; }
+.dock-left .dot, .dock-right .dot { width: 40px; height: 32px; }
+.dock-float .dot { width: 34px; }
+.dot::after { content: ""; width: 20px; height: 20px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 2px #000000; }
+.dot.on::after { box-shadow: 0 0 0 2px #000000, 0 0 0 4px #ffffff; }
+.dot-0 { color: #ffffff; }
+.dot-1 { color: #cc6666; }
+.dot-2 { color: #f0c674; }
+.dot-3 { color: #81a2be; }
+.grip { display: none; flex: none; width: 26px; height: 82px; align-items: center; justify-content: center; color: #8a8a8a; cursor: grab; grid-row: span 2; }
+.dock-float .grip { display: flex; }
+.grip .icon { width: 20px; height: 20px; }
+/* Floating, the bar folds into two rows: tools and history on top, colours and placement below. */
+.dock-float .tool, .dock-float .undo, .dock-float .redo, .dock-float .done { order: 1; }
+.dock-float .dot, .dock-float .attach { order: 2; }
+.dock-float .dock { order: 3; }
+.dock-float .grip { order: 0; }
+/* Where the bar sits, picked like the phone's own action sheet. */
+.sheet { position: absolute; inset: 0; z-index: 10; display: flex; align-items: flex-end; padding: 0 8px 8px; background: rgba(0, 0, 0, 0.35); }
+.sheet[hidden] { display: none; }
+.sheet-panel { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+.sheet-list { display: flex; flex-direction: column; border-radius: 14px; overflow: hidden; background: #2d2d30; }
+.sheet-title { padding: 12px 16px; color: #8a8a8a; font-size: 13px; text-align: center; border-bottom: 1px solid #3c3c40; }
+.action { border: 0; background: #2d2d30; color: var(--accent); padding: 14px; font: 500 17px -apple-system, system-ui, sans-serif; text-align: center; -webkit-tap-highlight-color: transparent; }
+.sheet-list .action + .action { border-top: 1px solid #3c3c40; }
+.action.on { color: #ffffff; font-weight: 600; }
+.action-cancel { border-radius: 14px; color: #d4d4d4; font-weight: 600; }
+</style>
+<style class="float-position"></style>
+</head>
+<body class="dock-bottom">
+<svg class="ink" xmlns="http://www.w3.org/2000/svg"><g class="strokes"></g></svg>
+<p class="notice" hidden role="status"></p>
+<nav class="bar" aria-label="Draw">
+  <span class="grip" aria-label="Move"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a1 1 0 1 0 2 0a1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0a1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0a1 1 0 1 0-2 0m6-14a1 1 0 1 0 2 0a1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0a1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0a1 1 0 1 0-2 0"/></svg></span>
+  <button class="key tool on" data-tool="pen" aria-label="Pen"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 20h4L18.5 9.5a2.828 2.828 0 1 0-4-4L4 16zm9.5-13.5l4 4"/></svg></button>
+  <button class="key tool" data-tool="highlight" aria-label="Highlighter"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 19h4L17.5 8.5a2.828 2.828 0 1 0-4-4L3 15zm9.5-13.5l4 4m-12 4l4 4M21 15v4h-8l4-4z"/></svg></button>
+  <button class="key tool" data-tool="erase" aria-label="Eraser"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H8.5l-4.21-4.3a1 1 0 0 1 0-1.41l10-10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41L11.5 20m6.5-6.7L11.7 7"/></svg></button>
+  <button class="dot dot-0 on" data-colour="0" aria-label="White"></button>
+  <button class="dot dot-1" data-colour="1" aria-label="Red"></button>
+  <button class="dot dot-2" data-colour="2" aria-label="Yellow"></button>
+  <button class="dot dot-3" data-colour="3" aria-label="Blue"></button>
+  <button class="key undo" disabled aria-label="Undo"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="m9 14l-4-4l4-4"/><path d="M5 10h11a4 4 0 1 1 0 8h-1"/></g></svg></button>
+  <button class="key redo" disabled aria-label="Redo"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="m15 14l4-4l-4-4"/><path d="M19 10H8a4 4 0 1 0 0 8h1"/></g></svg></button>
+  <button class="key attach" hidden aria-label="Add the sketch to the message"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m15 7l-6.5 6.5a1.5 1.5 0 0 0 3 3L18 10a3 3 0 0 0-6-6l-6.5 6.5a4.5 4.5 0 0 0 9 9L21 13"/></svg></button>
+  <button class="key dock" aria-label="Move the bar"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm5-2v16"/></svg></button>
+  <button class="key done" aria-label="Done"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m5 12l5 5L20 7"/></svg></button>
+</nav>
+<div class="sheet" hidden>
+  <div class="sheet-panel">
+    <div class="sheet-list">
+      <div class="sheet-title">Draw bar position</div>
+      <button class="action" data-dock="top">Top</button>
+      <button class="action" data-dock="left">Left</button>
+      <button class="action" data-dock="right">Right</button>
+      <button class="action" data-dock="bottom">Bottom</button>
+      <button class="action" data-dock="float">Float</button>
+    </div>
+    <button class="action action-cancel">Cancel</button>
+  </div>
+</div>
+<script>
+// codec:start
+// Ink as it is kept on a note: each stroke tied to the line it starts on, so
+// it moves with that line when the text wraps differently, and its points as
+// small integer steps in a compact text, to fit many strokes in one note.
+const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+const COLOURS = ['#ffffff', '#cc6666', '#f0c674', '#81a2be'];
+const STEP = 2047;
+function put(value, chars) {
+  const bias = 1 << (6 * chars - 1);
+  let n = Math.max(-bias, Math.min(bias - 1, Math.round(value))) + bias, out = '';
+  for (let i = 0; i < chars; i++) { out = ALPHABET[n & 63] + out; n >>= 6; }
+  return out;
+}
+function take(text, at, chars) {
+  let n = 0;
+  for (let i = 0; i < chars; i++) {
+    const v = ALPHABET.indexOf(text[at + i]);
+    if (v < 0) throw new Error('Bad ink.');
+    n = n * 64 + v;
+  }
+  return n - (1 << (6 * chars - 1));
+}
+/** A stroke { colour, highlight, width, line, points: [[x, dy]] } as text. */
+function encodeStroke(stroke) {
+  const points = [];
+  // A step is at most STEP each way; a longer one is split.
+  for (const [x, y] of stroke.points) {
+    const last = points[points.length - 1];
+    if (last) {
+      const parts = Math.ceil(Math.max(Math.abs(x - last[0]), Math.abs(y - last[1])) / STEP) || 1;
+      for (let i = 1; i < parts; i++) points.push([last[0] + (x - last[0]) * i / parts, last[1] + (y - last[1]) * i / parts]);
+    }
+    points.push([x, y]);
+  }
+  const rounded = points.map(([x, y]) => [Math.round(x), Math.round(y)]);
+  let text = `${stroke.colour}${stroke.highlight ? 'h' : 'p'}${put(stroke.width * 10, 2)}${put(stroke.line, 3)}${put(rounded[0][0], 3)}${put(rounded[0][1], 3)}`;
+  for (let i = 1; i < rounded.length; i++) text += put(rounded[i][0] - rounded[i - 1][0], 2) + put(rounded[i][1] - rounded[i - 1][1], 2);
+  return text;
+}
+function decodeStroke(text) {
+  if (!/^[0-3][ph]/.test(text) || (text.length - 13) % 4) throw new Error('Bad ink.');
+  const stroke = { colour: Number(text[0]), highlight: text[1] === 'h', width: take(text, 2, 2) / 10, line: take(text, 4, 3), points: [] };
+  let x = take(text, 7, 3), y = take(text, 10, 3);
+  stroke.points.push([x, y]);
+  for (let at = 13; at < text.length; at += 4) { x += take(text, at, 2); y += take(text, at + 2, 2); stroke.points.push([x, y]); }
+  return stroke;
+}
+function encodeInk(strokes) { return strokes.length ? JSON.stringify({ v: 1, s: strokes.map(encodeStroke) }) : ''; }
+function decodeInk(data) {
+  if (!data) return [];
+  const value = JSON.parse(data);
+  if (value?.v !== 1 || !Array.isArray(value.s)) throw new Error('Bad ink.');
+  return value.s.map(decodeStroke);
+}
+/** Fewer points where a stroke runs straight: closer than `gap` pixels to the last kept one. */
+function thin(points, gap = 2) {
+  const kept = [points[0]];
+  for (let i = 1; i < points.length - 1; i++) {
+    const last = kept[kept.length - 1];
+    if (Math.hypot(points[i][0] - last[0], points[i][1] - last[1]) >= gap) kept.push(points[i]);
+  }
+  if (points.length > 1) kept.push(points[points.length - 1]);
+  return kept;
+}
+// codec:end
+
+const LIMIT = 60_000;
+const $ = (s, root = document) => root.querySelector(s);
+const $$ = (s, root = document) => [...root.querySelectorAll(s)];
+const NS = 'http://www.w3.org/2000/svg';
+const send = message => parent.postMessage({ divernote: 1, ...message }, '*');
+
+let place, view = { scrollTop: 0, lines: [], width: 0, height: 0 };
+let strokes = [], done = [], undone = [];
+let tool = 'pen', colour = 0;
+let settings = { side: 'bottom', x: 8, y: 0.6 };
+const group = $('.strokes');
+
+// --- where the lines are --------------------------------------------------------------
+
+function lineTop(index) {
+  const line = view.lines[Math.max(0, Math.min(view.lines.length - 1, index))];
+  return line ? line.top : 0;
+}
+/** The line a point in the content falls on: the last one starting above it. */
+function lineAt(y) {
+  let found = 0;
+  view.lines.forEach((line, index) => { if (line.top <= y) found = index; });
+  return found;
+}
+const content = (clientX, clientY) => [clientX, clientY + view.scrollTop];
+
+// --- drawing --------------------------------------------------------------------------
+
+function pathOf(stroke) {
+  const top = lineTop(stroke.line);
+  const pts = stroke.points.map(([x, dy]) => [x, top + dy]);
+  if (pts.length === 1) return `M${pts[0][0]} ${pts[0][1]} l0.01 0`;
+  let d = `M${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) d += ` Q${pts[i][0]} ${pts[i][1]} ${(pts[i][0] + pts[i + 1][0]) / 2} ${(pts[i][1] + pts[i + 1][1]) / 2}`;
+  const last = pts[pts.length - 1];
+  return `${d} L${last[0]} ${last[1]}`;
+}
+function element(stroke) {
+  const path = stroke.path ?? (stroke.path = document.createElementNS(NS, 'path'));
+  path.setAttribute('class', stroke.highlight ? 'stroke highlight' : 'stroke');
+  path.setAttribute('stroke', COLOURS[stroke.colour] ?? COLOURS[0]);
+  path.setAttribute('stroke-width', stroke.width);
+  path.setAttribute('d', pathOf(stroke));
+  return path;
+}
+function render() {
+  group.setAttribute('transform', `translate(0 ${-view.scrollTop})`);
+  // A stroke being drawn stays on screen through a scroll.
+  group.replaceChildren(...[...strokes, current].filter(Boolean).map(element));
+  $('.undo').disabled = !done.length;
+  $('.redo').disabled = !undone.length;
+  $('.attach').disabled = !strokes.length;
+}
+
+const pointers = new Map();
+let current, pan;
+const touches = () => [...pointers.values()].filter(p => p.pointerType === 'touch');
+const middle = list => list.reduce((sum, p) => sum + p.clientY, 0) / list.length;
+
+$('.ink').addEventListener('pointerdown', event => {
+  event.preventDefault();
+  $('.ink').setPointerCapture(event.pointerId);
+  pointers.set(event.pointerId, event);
+  // A second finger makes it a scroll, and takes back the line the first one started.
+  if (event.pointerType === 'touch' && touches().length >= 2) {
+    if (current?.touch) { current.path?.remove(); current = undefined; }
+    pan = { y: middle(touches()) };
+    return;
+  }
+  if (pan) return;
+  const [x, y] = content(event.clientX, event.clientY);
+  if (tool === 'erase') { erase(x, y); return; }
+  const pressure = event.pointerType === 'pen' && event.pressure > 0 ? 0.5 + event.pressure : 1;
+  const line = lineAt(y);
+  current = { colour, highlight: tool === 'highlight', width: tool === 'highlight' ? 16 : Math.round(25 * pressure) / 10, line, points: [[x, y - lineTop(line)]], touch: event.pointerType === 'touch' };
+  group.append(element(current));
+});
+$('.ink').addEventListener('pointermove', event => {
+  if (!pointers.has(event.pointerId)) return;
+  pointers.set(event.pointerId, event);
+  if (pan) {
+    const y = middle(touches());
+    send({ type: 'scroll', by: pan.y - y });
+    pan.y = y;
+    return;
+  }
+  for (const each of event.getCoalescedEvents?.() ?? [event]) {
+    const [x, y] = content(each.clientX, each.clientY);
+    if (tool === 'erase') erase(x, y);
+    else if (current) current.points.push([x, y - lineTop(current.line)]);
+  }
+  if (current) element(current);
+});
+function lift(event) {
+  if (!pointers.delete(event.pointerId)) return;
+  if (pan) { if (!pointers.size) pan = undefined; return; }
+  if (!current) return;
+  current.points = thin(current.points);
+  const added = current;
+  current = undefined;
+  if (!fits([...strokes, added])) { added.path?.remove(); return; }
+  strokes.push(added);
+  record({ add: added });
+}
+$('.ink').addEventListener('pointerup', lift);
+$('.ink').addEventListener('pointercancel', lift);
+
+function erase(x, y) {
+  for (const stroke of strokes.slice()) {
+    const top = lineTop(stroke.line), reach = 10 + stroke.width / 2;
+    if (stroke.points.some(([px, dy]) => Math.hypot(px - x, top + dy - y) < reach)) {
+      strokes = strokes.filter(entry => entry !== stroke);
+      record({ remove: stroke });
+    }
+  }
+}
+
+/** Whether the ink still fits on the note; past the limit the stroke is not kept. */
+function fits(list) {
+  if (place !== 'note' || encodeInk(list).length <= LIMIT) return true;
+  notify('This note holds no more ink. Erase some to keep drawing.');
+  return false;
+}
+let noticeTimer;
+function notify(text) {
+  const notice = $('.notice');
+  notice.textContent = text;
+  notice.hidden = false;
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => { notice.hidden = true; }, 3000);
+}
+
+function record(action) {
+  done.push(action);
+  undone = [];
+  changed();
+}
+function apply(action, forward) {
+  const adding = forward ? action.add : action.remove, removing = forward ? action.remove : action.add;
+  if (removing) strokes = strokes.filter(entry => entry !== removing);
+  if (adding) strokes.push(adding);
+}
+$('.undo').addEventListener('click', () => { const a = done.pop(); if (a) { apply(a, false); undone.push(a); changed(); } });
+$('.redo').addEventListener('click', () => { const a = undone.pop(); if (a) { apply(a, true); done.push(a); changed(); } });
+
+/** Every change is kept on the note; the phone writes it once the drawing pauses. */
+function changed() {
+  render();
+  if (place === 'note') send({ type: 'save', data: encodeInk(strokes) });
+}
+
+// On an issue the sketch goes with the next message, as a photo does.
+$('.attach').addEventListener('click', () => {
+  if (!strokes.length) return;
+  const scale = 2, pad = 12;
+  const all = strokes.flatMap(stroke => stroke.points.map(([x, dy]) => [x, lineTop(stroke.line) + dy]));
+  const left = Math.min(...all.map(p => p[0])) - pad, top = Math.min(...all.map(p => p[1])) - pad;
+  const width = Math.max(...all.map(p => p[0])) + pad - left, height = Math.max(...all.map(p => p[1])) + pad - top;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.ceil(width * scale);
+  canvas.height = Math.ceil(height * scale);
+  const paint = canvas.getContext('2d');
+  paint.fillStyle = '#1e1a1d';
+  paint.fillRect(0, 0, canvas.width, canvas.height);
+  paint.setTransform(scale, 0, 0, scale, -left * scale, -top * scale);
+  paint.lineCap = 'round';
+  paint.lineJoin = 'round';
+  for (const stroke of strokes) {
+    paint.globalAlpha = stroke.highlight ? 0.35 : 1;
+    paint.strokeStyle = COLOURS[stroke.colour];
+    paint.lineWidth = stroke.width;
+    paint.stroke(new Path2D(pathOf(stroke)));
+  }
+  send({ type: 'attach', name: 'sketch.png', data: canvas.toDataURL('image/png').split(',')[1] });
+  strokes = []; done = []; undone = [];
+  render();
+});
+
+$$('.tool').forEach(button => button.addEventListener('click', () => {
+  tool = button.dataset.tool;
+  $$('.tool').forEach(each => each.classList.toggle('on', each === button));
+}));
+$$('.dot').forEach(button => button.addEventListener('click', () => {
+  colour = Number(button.dataset.colour);
+  $$('.dot').forEach(each => each.classList.toggle('on', each === button));
+  if (tool === 'erase') $('.tool[data-tool=pen]').click();
+}));
+$('.done').addEventListener('click', () => send({ type: 'close' }));
+
+// --- where the bar sits -----------------------------------------------------------------
+
+const SIDES = ['top', 'left', 'right', 'bottom', 'float'];
+const floatSheet = $('.float-position').sheet;
+function placeFloat() {
+  const bar = $('.bar');
+  const w = bar.offsetWidth || 260, h = bar.offsetHeight || 90;
+  settings.x = Math.max(8, Math.min(innerWidth - w - 8, settings.x));
+  const y = Math.max(8, Math.min(innerHeight - h - 8, settings.y * innerHeight));
+  settings.y = y / innerHeight;
+  while (floatSheet.cssRules.length) floatSheet.deleteRule(0);
+  floatSheet.insertRule(`:root { --float-x: ${settings.x}px; --float-y: ${y}px; }`, 0);
+}
+function dock(side, keep = true) {
+  settings.side = SIDES.includes(side) ? side : 'bottom';
+  SIDES.forEach(each => document.body.classList.toggle(`dock-${each}`, each === settings.side));
+  $$('.action[data-dock]').forEach(action => action.classList.toggle('on', action.dataset.dock === settings.side));
+  if (settings.side === 'float') requestAnimationFrame(placeFloat);
+  // Remembered on this phone until it is changed.
+  if (keep) send({ type: 'settings', value: settings });
+}
+$('.dock').addEventListener('click', () => { $('.sheet').hidden = false; });
+$$('.action[data-dock]').forEach(action => action.addEventListener('click', () => { dock(action.dataset.dock); $('.sheet').hidden = true; }));
+$('.action-cancel').addEventListener('click', () => { $('.sheet').hidden = true; });
+addEventListener('resize', () => { if (settings.side === 'float') placeFloat(); });
+
+const grip = $('.grip');
+let drag;
+grip.addEventListener('pointerdown', event => {
+  event.preventDefault();
+  grip.setPointerCapture(event.pointerId);
+  const box = $('.bar').getBoundingClientRect();
+  drag = { id: event.pointerId, dx: event.clientX - box.left, dy: event.clientY - box.top };
+});
+grip.addEventListener('pointermove', event => {
+  if (drag?.id !== event.pointerId) return;
+  settings.x = event.clientX - drag.dx;
+  settings.y = (event.clientY - drag.dy) / innerHeight;
+  placeFloat();
+});
+const drop = event => { if (drag?.id === event.pointerId) { drag = undefined; send({ type: 'settings', value: settings }); } };
+grip.addEventListener('pointerup', drop);
+grip.addEventListener('pointercancel', drop);
+
+// --- the phone ---------------------------------------------------------------------------
+
+addEventListener('message', event => {
+  const message = event.data;
+  if (event.source !== parent || !message || message.divernote !== 1) return;
+  if (message.type === 'open') {
+    place = message.place;
+    $('.attach').hidden = place !== 'issue';
+    try { strokes = place === 'note' ? decodeInk(message.data) : []; } catch { strokes = []; notify('The ink on this note could not be read.'); }
+    done = []; undone = [];
+    const saved = message.settings && typeof message.settings === 'object' ? message.settings : {};
+    settings = { ...settings, ...(Number.isFinite(saved.x) ? { x: saved.x } : {}), ...(Number.isFinite(saved.y) ? { y: saved.y } : {}) };
+    dock(saved.side ?? settings.side, false);
+    render();
+  } else if (message.type === 'view') {
+    view = { scrollTop: message.scrollTop, lines: Array.isArray(message.lines) ? message.lines : [], width: message.width, height: message.height };
+    render();
+  }
+});
+</script>
+</body>
+</html>
