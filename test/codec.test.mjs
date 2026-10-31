@@ -46,3 +46,12 @@ test('a straight run keeps few points, and a stroke stays compact', () => {
   const stroke = { colour: 0, highlight: false, width: 2.5, line: 0, points: Array.from({ length: 100 }, (_, i) => [i * 3, Math.sin(i) * 20]) };
   assert.ok(encodeInk([stroke]).length < 450);
 });
+
+test('an arrow is kept as its two ends and comes back an arrow', () => {
+  const arrow = { colour: 2, highlight: false, arrow: true, width: 2.5, line: 3, points: [[10, 4], [200, 300]] };
+  const [back] = decodeInk(encodeInk([arrow]));
+  assert.equal(back.arrow, true);
+  assert.equal(back.highlight, false);
+  assert.deepEqual(plain(back.points), arrow.points);
+  assert.equal(decodeInk(encodeInk([{ ...arrow, arrow: undefined }]))[0].arrow, undefined);
+});
