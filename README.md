@@ -7,8 +7,9 @@ iPhone or iPad, the way Notability does, with a finger or an Apple Pencil.
   brings up the draw bar; the check mark puts it away. On a note the ink
   stays in sight after that, and whenever the note is opened, and the note
   takes touches as usual (needs a phone build with resting pages).
-- Pen, highlighter and eraser, four colours, undo and redo. A pencil's
-  pressure sets the line's width.
+- Hand, pen, highlighter, eraser and arrow, four colours, undo and redo. A
+  pencil's pressure sets the line's width. The hand drags a drawing or an arrow
+  to move it, or scrolls where there is none.
 - With the bar out, one finger draws and two fingers scroll.
 - On a note, the ink stays with the note and scrolls with it. Each stroke is
   tied to the line it starts on, so it moves with that line when the text

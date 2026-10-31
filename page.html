@@ -17,33 +17,36 @@ body { position: fixed; inset: 0; touch-action: none; user-select: none; -webkit
 .notice { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); max-width: calc(100% - 24px); padding: 8px 12px; border-radius: 10px; background: #000000; color: var(--fg); font-size: 13px; text-align: center; }
 .notice[hidden] { display: none; }
 /* The bar, drawn like the phone's own key bar. */
-.bar { position: absolute; z-index: 5; display: flex; align-items: center; gap: 0; padding: 4px; background: #000000; overflow: auto; scrollbar-width: none; }
+.bar { position: absolute; z-index: 5; display: flex; flex-direction: column; gap: 2px; padding: 6px; background: #ffffff; color: #1f1f1f; border-radius: 16px; box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45); overflow: auto; scrollbar-width: none; }
 .bar::-webkit-scrollbar { display: none; }
-.dock-bottom .bar { left: 0; right: 0; bottom: 0; height: 48px; border-radius: 14px 14px 0 0; }
-.dock-top .bar { left: 0; right: 0; top: 0; height: 48px; border-radius: 0 0 14px 14px; }
-.dock-left .bar, .dock-right .bar { top: 0; bottom: 0; width: 48px; flex-direction: column; gap: 2px; }
-.dock-left .bar { left: 0; border-radius: 0 14px 14px 0; }
-.dock-right .bar { right: 0; border-radius: 14px 0 0 14px; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 2px; }
+.dock-bottom .bar, .dock-top .bar { left: 50%; width: min(100% - 16px, 420px); transform: translateX(-50%); }
+.dock-bottom .bar { bottom: 8px; }
+.dock-top .bar { top: 8px; }
+.dock-left .bar, .dock-right .bar { top: 8px; max-height: calc(100% - 16px); width: 52px; }
+.dock-left .bar { left: 8px; }
+.dock-right .bar { right: 8px; }
+.dock-left .row, .dock-right .row { flex-direction: column; }
 .dock-float .bar {
-  left: var(--float-x); top: var(--float-y); display: grid; grid-template-columns: 28px repeat(6, 34px); grid-auto-rows: 40px; gap: 2px;
-  border-radius: 14px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); overflow: visible;
+  left: var(--float-x); top: var(--float-y); display: grid; grid-template-columns: 28px repeat(7, 34px); grid-auto-rows: 40px; gap: 2px; overflow: visible;
 }
+.dock-float .row { display: contents; }
 .key {
   flex: 1 0 auto; min-width: 34px; height: 40px; display: flex; align-items: center; justify-content: center; margin: 0; border: 0; border-radius: 8px;
-  padding: 0 4px; background: none; color: #ffffff; -webkit-tap-highlight-color: transparent;
+  padding: 0 4px; background: none; color: inherit; -webkit-tap-highlight-color: transparent;
 }
 .dock-left .key, .dock-right .key, .dock-float .key { flex: none; width: 34px; min-width: 0; }
 .dock-left .key, .dock-right .key { width: 40px; }
-.key.on { background: #ffffff; color: #000000; }
+.key.on { background: #2f80ed; color: #ffffff; }
 .key:disabled { opacity: 0.35; }
 .key[hidden] { display: none; }
-.key.done { color: var(--accent); }
+.key.done { color: #1f8a70; }
 .icon { width: 22px; height: 22px; }
 .dot { flex: none; width: 30px; height: 40px; border: 0; padding: 0; background: none; display: flex; align-items: center; justify-content: center; }
 .dock-left .dot, .dock-right .dot { width: 40px; height: 32px; }
 .dock-float .dot { width: 34px; }
-.dot::after { content: ""; width: 20px; height: 20px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 2px #000000; }
-.dot.on::after { box-shadow: 0 0 0 2px #000000, 0 0 0 4px #ffffff; }
+.dot::after { content: ""; width: 20px; height: 20px; border-radius: 50%; background: currentColor; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3); }
+.dot.on::after { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3), 0 0 0 2px #ffffff, 0 0 0 4px #2f80ed; }
 .dot-0 { color: #ffffff; }
 .dot-1 { color: #cc6666; }
 .dot-2 { color: #f0c674; }
@@ -51,10 +54,10 @@ body { position: fixed; inset: 0; touch-action: none; user-select: none; -webkit
 .grip { display: none; flex: none; width: 26px; height: 82px; align-items: center; justify-content: center; color: #8a8a8a; cursor: grab; grid-row: span 2; }
 .dock-float .grip { display: flex; }
 .grip .icon { width: 20px; height: 20px; }
-/* Floating, the bar folds into two rows: tools and history on top, colours and placement below. */
-.dock-float .tool, .dock-float .undo, .dock-float .redo, .dock-float .done { order: 1; }
-.dock-float .dot, .dock-float .attach { order: 2; }
-.dock-float .dock { order: 3; }
+/* Floating, the tools run along the top with the check mark at the end, and the rest below. */
+.dock-float .row-tools > * { order: 1; }
+.dock-float .row-tools .done { grid-column: 8; }
+.dock-float .row-more > * { order: 2; }
 .dock-float .grip { order: 0; }
 /* Where the bar sits, picked like the phone's own action sheet. */
 .sheet { position: absolute; inset: 0; z-index: 10; display: flex; align-items: flex-end; padding: 0 8px 8px; background: rgba(0, 0, 0, 0.35); }
@@ -76,18 +79,24 @@ body { position: fixed; inset: 0; touch-action: none; user-select: none; -webkit
 <p class="notice" hidden role="status"></p>
 <nav class="bar" aria-label="Draw">
   <span class="grip" aria-label="Move"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a1 1 0 1 0 2 0a1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0a1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0a1 1 0 1 0-2 0m6-14a1 1 0 1 0 2 0a1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0a1 1 0 1 0-2 0m0 7a1 1 0 1 0 2 0a1 1 0 1 0-2 0"/></svg></span>
-  <button class="key tool on" data-tool="pen" aria-label="Pen"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 20h4L18.5 9.5a2.828 2.828 0 1 0-4-4L4 16zm9.5-13.5l4 4"/></svg></button>
-  <button class="key tool" data-tool="highlight" aria-label="Highlighter"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 19h4L17.5 8.5a2.828 2.828 0 1 0-4-4L3 15zm9.5-13.5l4 4m-12 4l4 4M21 15v4h-8l4-4z"/></svg></button>
-  <button class="key tool" data-tool="erase" aria-label="Eraser"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H8.5l-4.21-4.3a1 1 0 0 1 0-1.41l10-10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41L11.5 20m6.5-6.7L11.7 7"/></svg></button>
-  <button class="dot dot-0 on" data-colour="0" aria-label="White"></button>
-  <button class="dot dot-1" data-colour="1" aria-label="Red"></button>
-  <button class="dot dot-2" data-colour="2" aria-label="Yellow"></button>
-  <button class="dot dot-3" data-colour="3" aria-label="Blue"></button>
-  <button class="key undo" disabled aria-label="Undo"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="m9 14l-4-4l4-4"/><path d="M5 10h11a4 4 0 1 1 0 8h-1"/></g></svg></button>
-  <button class="key redo" disabled aria-label="Redo"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="m15 14l4-4l-4-4"/><path d="M19 10H8a4 4 0 1 0 0 8h1"/></g></svg></button>
-  <button class="key attach" hidden aria-label="Add the sketch to the message"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m15 7l-6.5 6.5a1.5 1.5 0 0 0 3 3L18 10a3 3 0 0 0-6-6l-6.5 6.5a4.5 4.5 0 0 0 9 9L21 13"/></svg></button>
-  <button class="key dock" aria-label="Move the bar"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm5-2v16"/></svg></button>
-  <button class="key done" aria-label="Done"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m5 12l5 5L20 7"/></svg></button>
+  <div class="row row-more">
+    <button class="dot dot-0 on" data-colour="0" aria-label="White"></button>
+    <button class="dot dot-1" data-colour="1" aria-label="Red"></button>
+    <button class="dot dot-2" data-colour="2" aria-label="Yellow"></button>
+    <button class="dot dot-3" data-colour="3" aria-label="Blue"></button>
+    <button class="key undo" disabled aria-label="Undo"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="m9 14l-4-4l4-4"/><path d="M5 10h11a4 4 0 1 1 0 8h-1"/></g></svg></button>
+    <button class="key redo" disabled aria-label="Redo"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="m15 14l4-4l-4-4"/><path d="M19 10H8a4 4 0 1 0 0 8h1"/></g></svg></button>
+    <button class="key attach" hidden aria-label="Add the sketch to the message"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m15 7l-6.5 6.5a1.5 1.5 0 0 0 3 3L18 10a3 3 0 0 0-6-6l-6.5 6.5a4.5 4.5 0 0 0 9 9L21 13"/></svg></button>
+    <button class="key dock" aria-label="Move the bar"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm5-2v16"/></svg></button>
+  </div>
+  <div class="row row-tools">
+    <button class="key tool" data-tool="hand" aria-label="Hand: move drawings"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12m0-6.5v-2a1.5 1.5 0 1 1 3 0V12m0-6.5a1.5 1.5 0 0 1 3 0V12m0-4.5a1.5 1.5 0 0 1 3 0V16a6 6 0 0 1-6 6h-2h.208a6 6 0 0 1-5.012-2.7L7 19q-.468-.718-3.286-5.728a1.5 1.5 0 0 1 .536-2.022a1.87 1.87 0 0 1 2.28.28L8 13"/></svg></button>
+    <button class="key tool on" data-tool="pen" aria-label="Pen"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 20h4L18.5 9.5a2.828 2.828 0 1 0-4-4L4 16zm9.5-13.5l4 4"/></svg></button>
+    <button class="key tool" data-tool="highlight" aria-label="Highlighter"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 19h4L17.5 8.5a2.828 2.828 0 1 0-4-4L3 15zm9.5-13.5l4 4m-12 4l4 4M21 15v4h-8l4-4z"/></svg></button>
+    <button class="key tool" data-tool="erase" aria-label="Eraser"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H8.5l-4.21-4.3a1 1 0 0 1 0-1.41l10-10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41L11.5 20m6.5-6.7L11.7 7"/></svg></button>
+    <button class="key tool" data-tool="arrow" aria-label="Arrow"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 7L7 17M8 7h9v9"/></svg></button>
+    <button class="key done" aria-label="Done"><svg xmlns="http://www.w3.org/2000/svg" class="icon" aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m5 12l5 5L20 7"/></svg></button>
+  </div>
 </nav>
 <div class="sheet" hidden>
   <div class="sheet-panel">
@@ -125,7 +134,7 @@ function take(text, at, chars) {
   }
   return n - (1 << (6 * chars - 1));
 }
-/** A stroke { colour, highlight, width, line, points: [[x, dy]] } as text. */
+/** A stroke { colour, highlight, arrow, width, line, points: [[x, dy]] } as text. An arrow is its two ends. */
 function encodeStroke(stroke) {
   const points = [];
   // A step is at most STEP each way; a longer one is split.
@@ -138,13 +147,13 @@ function encodeStroke(stroke) {
     points.push([x, y]);
   }
   const rounded = points.map(([x, y]) => [Math.round(x), Math.round(y)]);
-  let text = `${stroke.colour}${stroke.highlight ? 'h' : 'p'}${put(stroke.width * 10, 2)}${put(stroke.line, 3)}${put(rounded[0][0], 3)}${put(rounded[0][1], 3)}`;
+  let text = `${stroke.colour}${stroke.highlight ? 'h' : stroke.arrow ? 'a' : 'p'}${put(stroke.width * 10, 2)}${put(stroke.line, 3)}${put(rounded[0][0], 3)}${put(rounded[0][1], 3)}`;
   for (let i = 1; i < rounded.length; i++) text += put(rounded[i][0] - rounded[i - 1][0], 2) + put(rounded[i][1] - rounded[i - 1][1], 2);
   return text;
 }
 function decodeStroke(text) {
-  if (!/^[0-3][ph]/.test(text) || (text.length - 13) % 4) throw new Error('Bad ink.');
-  const stroke = { colour: Number(text[0]), highlight: text[1] === 'h', width: take(text, 2, 2) / 10, line: take(text, 4, 3), points: [] };
+  if (!/^[0-3][pha]/.test(text) || (text.length - 13) % 4) throw new Error('Bad ink.');
+  const stroke = { colour: Number(text[0]), highlight: text[1] === 'h', ...(text[1] === 'a' ? { arrow: true } : {}), width: take(text, 2, 2) / 10, line: take(text, 4, 3), points: [] };
   let x = take(text, 7, 3), y = take(text, 10, 3);
   stroke.points.push([x, y]);
   for (let at = 13; at < text.length; at += 4) { x += take(text, at, 2); y += take(text, at + 2, 2); stroke.points.push([x, y]); }
@@ -202,11 +211,19 @@ const content = (clientX, clientY) => [clientX, clientY + view.scrollTop];
 function pathOf(stroke) {
   const top = lineTop(stroke.line);
   const pts = stroke.points.map(([x, dy]) => [x, top + dy]);
+  if (stroke.arrow) return arrowPath(pts, stroke.width);
   if (pts.length === 1) return `M${pts[0][0]} ${pts[0][1]} l0.01 0`;
   let d = `M${pts[0][0]} ${pts[0][1]}`;
   for (let i = 1; i < pts.length - 1; i++) d += ` Q${pts[i][0]} ${pts[i][1]} ${(pts[i][0] + pts[i + 1][0]) / 2} ${(pts[i][1] + pts[i + 1][1]) / 2}`;
   const last = pts[pts.length - 1];
   return `${d} L${last[0]} ${last[1]}`;
+}
+/** A straight shaft and two barbs at the far end; only the ends are kept. */
+function arrowPath(pts, width) {
+  const [x0, y0] = pts[0], [x1, y1] = pts[pts.length - 1];
+  const angle = Math.atan2(y1 - y0, x1 - x0), size = 10 + width * 2;
+  const barb = turn => `${x1 - size * Math.cos(angle + turn)} ${y1 - size * Math.sin(angle + turn)}`;
+  return `M${x0} ${y0} L${x1} ${y1} M${barb(0.5)} L${x1} ${y1} L${barb(-0.5)}`;
 }
 function element(stroke) {
   const path = stroke.path ?? (stroke.path = document.createElementNS(NS, 'path'));
@@ -226,7 +243,8 @@ function render() {
 }
 
 const pointers = new Map();
-let current, pan;
+// The hand's drag of one drawing, or of the page where there is none.
+let current, pan, moving, handPan;
 const touches = () => [...pointers.values()].filter(p => p.pointerType === 'touch');
 const middle = list => list.reduce((sum, p) => sum + p.clientY, 0) / list.length;
 
@@ -237,15 +255,23 @@ $('.ink').addEventListener('pointerdown', event => {
   // A second finger makes it a scroll, and takes back the line the first one started.
   if (event.pointerType === 'touch' && touches().length >= 2) {
     if (current?.touch) { current.path?.remove(); current = undefined; }
+    if (moving) { restore(moving.stroke, moving.from); moving = undefined; render(); }
+    handPan = undefined;
     pan = { y: middle(touches()) };
     return;
   }
   if (pan) return;
   const [x, y] = content(event.clientX, event.clientY);
+  if (tool === 'hand') {
+    const stroke = strokeAt(x, y);
+    if (stroke) moving = { stroke, x, y, from: placeOf(stroke), id: event.pointerId };
+    else handPan = { y: event.clientY, id: event.pointerId };
+    return;
+  }
   if (tool === 'erase') { erase(x, y); return; }
   const pressure = event.pointerType === 'pen' && event.pressure > 0 ? 0.5 + event.pressure : 1;
   const line = lineAt(y);
-  current = { colour, highlight: tool === 'highlight', width: tool === 'highlight' ? 16 : Math.round(25 * pressure) / 10, line, points: [[x, y - lineTop(line)]], touch: event.pointerType === 'touch' };
+  current = { colour, highlight: tool === 'highlight', width: tool === 'highlight' ? 16 : Math.round(25 * pressure) / 10, line, ...(tool === 'arrow' ? { arrow: true } : {}), points: [[x, y - lineTop(line)]], touch: event.pointerType === 'touch' };
   group.append(element(current));
 });
 $('.ink').addEventListener('pointermove', event => {
@@ -257,9 +283,21 @@ $('.ink').addEventListener('pointermove', event => {
     pan.y = y;
     return;
   }
+  if (handPan?.id === event.pointerId) {
+    send({ type: 'scroll', by: handPan.y - event.clientY });
+    handPan.y = event.clientY;
+    return;
+  }
+  if (moving?.id === event.pointerId) {
+    const [x, y] = content(event.clientX, event.clientY);
+    moving.stroke.points = moving.from.points.map(([px, dy]) => [px + x - moving.x, dy + y - moving.y]);
+    element(moving.stroke);
+    return;
+  }
   for (const each of event.getCoalescedEvents?.() ?? [event]) {
     const [x, y] = content(each.clientX, each.clientY);
     if (tool === 'erase') erase(x, y);
+    else if (current?.arrow) current.points = [current.points[0], [x, y - lineTop(current.line)]];
     else if (current) current.points.push([x, y - lineTop(current.line)]);
   }
   if (current) element(current);
@@ -267,7 +305,15 @@ $('.ink').addEventListener('pointermove', event => {
 function lift(event) {
   if (!pointers.delete(event.pointerId)) return;
   if (pan) { if (!pointers.size) pan = undefined; return; }
+  if (handPan?.id === event.pointerId) { handPan = undefined; return; }
+  if (moving?.id === event.pointerId) { dropMoved(); return; }
   if (!current) return;
+  // A tap with the arrow is no arrow.
+  if (current.arrow && !(current.points.length > 1 && Math.hypot(current.points[1][0] - current.points[0][0], current.points[1][1] - current.points[0][1]) >= 6)) {
+    current.path?.remove();
+    current = undefined;
+    return;
+  }
   current.points = thin(current.points);
   const added = current;
   current = undefined;
@@ -278,10 +324,40 @@ function lift(event) {
 $('.ink').addEventListener('pointerup', lift);
 $('.ink').addEventListener('pointercancel', lift);
 
+/** Whether a point in the content is within `reach` of the stroke's line, between its points too. */
+function touchesStroke(stroke, x, y, reach) {
+  const top = lineTop(stroke.line);
+  const pts = stroke.points.map(([px, dy]) => [px, top + dy]);
+  return pts.some(([px, py], index) => {
+    const [qx, qy] = pts[index + 1] ?? [px, py];
+    const length = (qx - px) ** 2 + (qy - py) ** 2;
+    const along = length ? Math.max(0, Math.min(1, ((x - px) * (qx - px) + (y - py) * (qy - py)) / length)) : 0;
+    return Math.hypot(px + along * (qx - px) - x, py + along * (qy - py) - y) < reach;
+  });
+}
+/** The drawing a finger on the hand picks: the topmost one there. */
+function strokeAt(x, y) {
+  return strokes.slice().reverse().find(stroke => touchesStroke(stroke, x, y, 18 + stroke.width / 2));
+}
+const placeOf = stroke => ({ line: stroke.line, points: stroke.points.map(point => [...point]) });
+function restore(stroke, place) {
+  stroke.line = place.line;
+  stroke.points = place.points.map(point => [...point]);
+}
+/** A moved drawing ties itself to the line it now starts on, so it follows that line when the text wraps. */
+function dropMoved() {
+  const { stroke, from } = moving;
+  moving = undefined;
+  if (stroke.points.every((point, index) => point[0] === from.points[index][0] && point[1] === from.points[index][1])) return;
+  const top = lineTop(from.line), line = lineAt(top + stroke.points[0][1]), shift = top - lineTop(line);
+  stroke.line = line;
+  stroke.points = stroke.points.map(([x, dy]) => [x, dy + shift]);
+  record({ move: stroke, from, to: placeOf(stroke) });
+}
+
 function erase(x, y) {
   for (const stroke of strokes.slice()) {
-    const top = lineTop(stroke.line), reach = 10 + stroke.width / 2;
-    if (stroke.points.some(([px, dy]) => Math.hypot(px - x, top + dy - y) < reach)) {
+    if (touchesStroke(stroke, x, y, 10 + stroke.width / 2)) {
       strokes = strokes.filter(entry => entry !== stroke);
       record({ remove: stroke });
     }
@@ -309,6 +385,7 @@ function record(action) {
   changed();
 }
 function apply(action, forward) {
+  if (action.move) { restore(action.move, forward ? action.to : action.from); return; }
   const adding = forward ? action.add : action.remove, removing = forward ? action.remove : action.add;
   if (removing) strokes = strokes.filter(entry => entry !== removing);
   if (adding) strokes.push(adding);
@@ -325,7 +402,7 @@ function changed() {
 // On an issue the sketch goes with the next message, as a photo does.
 $('.attach').addEventListener('click', () => {
   if (!strokes.length) return;
-  const scale = 2, pad = 12;
+  const scale = 2, pad = 24;
   const all = strokes.flatMap(stroke => stroke.points.map(([x, dy]) => [x, lineTop(stroke.line) + dy]));
   const left = Math.min(...all.map(p => p[0])) - pad, top = Math.min(...all.map(p => p[1])) - pad;
   const width = Math.max(...all.map(p => p[0])) + pad - left, height = Math.max(...all.map(p => p[1])) + pad - top;
@@ -356,7 +433,8 @@ $$('.tool').forEach(button => button.addEventListener('click', () => {
 $$('.dot').forEach(button => button.addEventListener('click', () => {
   colour = Number(button.dataset.colour);
   $$('.dot').forEach(each => each.classList.toggle('on', each === button));
-  if (tool === 'erase') $('.tool[data-tool=pen]').click();
+  // A colour is for drawing, so a tool that does not draw gives way to the pen.
+  if (tool === 'erase' || tool === 'hand') $('.tool[data-tool=pen]').click();
 }));
 // On a note the ink stays in sight once the bar is put away.
 $('.done').addEventListener('click', () => {
@@ -365,7 +443,7 @@ $('.done').addEventListener('click', () => {
 });
 function resting(on) {
   document.body.classList.toggle('resting', on);
-  if (on) { current?.path?.remove(); current = undefined; pan = undefined; pointers.clear(); $('.sheet').hidden = true; }
+  if (on) { current?.path?.remove(); current = undefined; pan = undefined; handPan = undefined; if (moving) { restore(moving.stroke, moving.from); moving = undefined; } pointers.clear(); $('.sheet').hidden = true; }
 }
 
 // --- where the bar sits -----------------------------------------------------------------
