@@ -1,9 +1,9 @@
 # divernote-draw
 
-A Divernote extension. Write and draw straight onto a note or an issue on an
+A Divernote extension. Write and draw straight onto a note on an
 iPhone or iPad, the way Notability does, with a finger or an Apple Pencil.
 
-- **draw** sits in the row under the input on an open note or issue. It
+- **draw** sits in the row under the input on an open note. It
   brings up the draw bar; the check mark puts it away. On a note the ink
   stays in sight after that, and whenever the note is opened, and the note
   takes touches as usual (needs a phone build with resting pages).
@@ -17,8 +17,6 @@ iPhone or iPad, the way Notability does, with a finger or an Apple Pencil.
   terminal, the web app and older phone builds show the note as they always
   have. A note holds up to 60,000 characters of ink, a few hundred strokes;
   past that the bar says so.
-- On an issue, the paperclip adds the sketch to the input as a picture.
-  Return then sends it, with whatever is typed, to the agent.
 - The input still takes typing while the bar is out.
 - The bar docks on the top, left, right or bottom edge, or floats anywhere
   over the page and is dragged by its grip. Where it was put is remembered
